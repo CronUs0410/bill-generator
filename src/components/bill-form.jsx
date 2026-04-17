@@ -26,6 +26,7 @@ export function BillForm() {
   const [shareUrl, setShareUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
+  const [currentBillId, setCurrentBillId] = useState(null);
   const pdfRef = useRef(null);
 
   const t = translations[lang];
@@ -124,6 +125,44 @@ export function BillForm() {
     }));
   }
 
+  function handleAddSuggestionToBill(suggestion) {
+    setFormState((current) => {
+      // Find if we have exactly one empty row at the very beginning
+      const isFirstEmpty =
+        current.items.length === 1 &&
+        !current.items[0].description &&
+        (!current.items[0].rate || current.items[0].rate === "0" || current.items[0].rate === "") &&
+        (!current.items[0].qty || current.items[0].qty === "0" || current.items[0].qty === "");
+
+      const rate = suggestion.default_rate !== null && suggestion.default_rate !== undefined ? String(suggestion.default_rate) : "0";
+
+      if (isFirstEmpty) {
+        return {
+          ...current,
+          items: [{
+            ...current.items[0],
+            description: suggestion.description,
+            rate: rate,
+            qty: "1",
+          }],
+        };
+      }
+
+      return {
+        ...current,
+        items: [
+          ...current.items,
+          {
+            ...createEmptyItem(current.items.length + 1),
+            description: suggestion.description,
+            rate: rate,
+            qty: "1",
+          }
+        ],
+      };
+    });
+  }
+
   function addRow() {
     setFormState((current) => ({
       ...current,
@@ -165,13 +204,14 @@ export function BillForm() {
     try {
       setSharing(true);
       const payload = prepareBillPayload(formState);
-      const token = crypto.randomUUID();
+      const token = currentBillId || crypto.randomUUID();
       
       await setDoc(doc(db, "bills", token), {
         ...payload,
         token,
-        created_at: serverTimestamp(),
-      });
+        updated_at: serverTimestamp(),
+        ...(currentBillId ? {} : { created_at: serverTimestamp() }),
+      }, { merge: true });
 
       if (payload.customer_name) {
         await setDoc(doc(db, "customers", payload.customer_name), {
@@ -181,11 +221,9 @@ export function BillForm() {
 
       setMessage(t.saveSuccess);
       setShareUrl("");
-
-      setFormState((current) => ({
-        ...current,
-        invoiceNo: String((Number.parseInt(current.invoiceNo, 10) || 0) + 1),
-      }));
+      if (!currentBillId) {
+        setCurrentBillId(token);
+      }
     } catch (error) {
       setMessage(error.message || t.error);
     } finally {
@@ -197,13 +235,14 @@ export function BillForm() {
     try {
       setSharing(true);
       const payload = prepareBillPayload(formState);
-      const token = crypto.randomUUID();
+      const token = currentBillId || crypto.randomUUID();
       
       await setDoc(doc(db, "bills", token), {
         ...payload,
         token,
-        created_at: serverTimestamp(),
-      });
+        updated_at: serverTimestamp(),
+        ...(currentBillId ? {} : { created_at: serverTimestamp() }),
+      }, { merge: true });
 
       if (payload.customer_name) {
         await setDoc(doc(db, "customers", payload.customer_name), {
@@ -214,16 +253,24 @@ export function BillForm() {
       const url = `${window.location.origin}/bill/${token}`;
       setShareUrl(url);
       setMessage(t.shareSuccess);
-
-      setFormState((current) => ({
-        ...current,
-        invoiceNo: String((Number.parseInt(current.invoiceNo, 10) || 0) + 1),
-      }));
+      if (!currentBillId) {
+        setCurrentBillId(token);
+      }
     } catch (error) {
       setMessage(error.message || t.error);
     } finally {
       setSharing(false);
     }
+  }
+
+  function handleNewBill() {
+    setFormState((current) => ({
+      ...createDefaultBill(),
+      invoiceNo: String((Number.parseInt(current.invoiceNo, 10) || 0) + 1),
+    }));
+    setCurrentBillId(null);
+    setShareUrl("");
+    setMessage("");
   }
 
   async function copyLink() {
@@ -390,7 +437,24 @@ export function BillForm() {
             <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_320px]">
               <div className="rounded-3xl border border-dashed border-slate-300 bg-slate-50 p-5">
                 <p className="text-sm font-semibold text-brand">{t.suggestionsTitle}</p>
-                <p className="mt-1 text-sm text-slate-500">{t.suggestionsSubtitle}</p>
+                <p className="mt-1 text-sm text-slate-500 mb-4">{t.suggestionsSubtitle}</p>
+                <div className="flex flex-wrap gap-2">
+                  {suggestions.length === 0 ? (
+                    <p className="text-sm text-slate-400">No suggestions yet. Add from Admin Panel.</p>
+                  ) : (
+                    suggestions.map((sug) => (
+                      <button
+                        key={sug.id}
+                        type="button"
+                        onClick={() => handleAddSuggestionToBill(sug)}
+                        className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:border-brand hover:bg-brand/5 hover:text-brand"
+                      >
+                        {sug.description}
+                        {sug.default_rate ? <span className="text-xs opacity-60">₹{sug.default_rate}</span> : null}
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
 
               <div className="rounded-3xl bg-brand p-5 text-white">
@@ -428,13 +492,13 @@ export function BillForm() {
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button type="button" className="sm:min-w-[180px]" onClick={handleDownloadPdf}>
+            <div className="flex flex-col gap-3 sm:flex-row flex-wrap">
+              <Button type="button" className="sm:min-w-[160px]" onClick={handleDownloadPdf}>
                 {t.downloadPdf}
               </Button>
               <Button
                 type="button"
-                className="sm:min-w-[180px]"
+                className="sm:min-w-[160px]"
                 onClick={handleSaveBill}
                 disabled={sharing}
               >
@@ -442,11 +506,19 @@ export function BillForm() {
               </Button>
               <Button
                 type="button"
-                className="sm:min-w-[180px]"
+                className="sm:min-w-[160px]"
                 onClick={handleShareBill}
                 disabled={sharing}
               >
                 {sharing ? t.sharing : t.shareBill}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="sm:min-w-[160px]"
+                onClick={handleNewBill}
+              >
+                + {t.newBill}
               </Button>
               {shareUrl ? (
                 <Button type="button" variant="secondary" onClick={copyLink}>
