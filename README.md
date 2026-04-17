@@ -1,6 +1,6 @@
 # Bill Generator
 
-Full-stack bilingual bill generator built with Next.js 14 App Router, Supabase, TailwindCSS, `qrcode.react`, `jspdf`, and `html2canvas`.
+Full-stack bilingual bill generator built with Next.js 14 App Router, Firebase, TailwindCSS, Recharts, `qrcode.react`, `jspdf`, and `html2canvas`.
 
 ## Setup
 
@@ -10,28 +10,23 @@ Full-stack bilingual bill generator built with Next.js 14 App Router, Supabase, 
 npm install
 ```
 
-2. Add environment variables in `.env.local`:
-
-```env
-NEXT_PUBLIC_SUPABASE_URL=your_project_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_anon_key
-```
-
-3. Run the SQL in [supabase/schema.sql](/C:/Users/Admin/OneDrive/Documents/New%20project/supabase/schema.sql) inside the Supabase SQL editor.
-
-4. Start development:
+2. Start development:
 
 ```bash
 npm run dev
 ```
 
+*(Note: Firebase config is pre-configured directly in the `src/lib/firebase.js` file)*
+
 ## Features
 
 - English and Gujarati UI toggle
-- Auto-incrementing invoice number from Supabase
-- Dynamic item table with description suggestions
-- QR code payment card using UPI
-- English-only PDF generation
+- Admin Analytics Dashboard with real-time Firestore charts (Recharts)
+- Auto-incrementing invoice number from Firebase
+- Dynamic item table with description suggestions (auto-saves customers & suggestions to Firebase)
+- Mark Bills as Paid / Unpaid dynamically from Admin Panel
+- QR code payment card using live UPI links
+- English-only high quality PDF downloads
+- Password-protected Home UI and Admin interface
 - Public share links at `/bill/[token]`
-- Admin panel at `/admin` with no login
-- Mobile-first layout ready for Vercel deployment
+- Mobile-first layout ready for deployment
